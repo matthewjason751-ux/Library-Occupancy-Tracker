@@ -1,0 +1,433 @@
+{
+  "name": "Employee Handbook Q&A RAG System",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "triggerOn": "specificFolder",
+        "folderToWatch": {
+          "__rl": true,
+          "value": "1Ct-RvLyZQqj9-PyXo0sXUEBXpUTboUIf",
+          "mode": "list",
+          "cachedResultName": "FOR RAG",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1Ct-RvLyZQqj9-PyXo0sXUEBXpUTboUIf"
+        },
+        "event": "fileCreated",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f7c93fc4-976c-4d45-840c-63adb2230b50",
+      "name": "New Handbook File",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Fz0rTiWhbzBzVbA6",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "1W1oPmOlYkrpyeY6YqoRV2YvwZ2br82Rj",
+          "mode": "list",
+          "cachedResultName": "Employee-Handbook.pdf",
+          "cachedResultUrl": "https://drive.google.com/file/d/1W1oPmOlYkrpyeY6YqoRV2YvwZ2br82Rj/view?usp=drivesdk"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "f6b270ab-2857-4632-a4ed-981e3ecf8a38",
+      "name": "Download Employee Handbook PDF",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "Fz0rTiWhbzBzVbA6",
+          "name": "Google Drive OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        0
+      ],
+      "id": "cf044d57-7cba-46eb-88f3-90987adb3f7c",
+      "name": "Extract Handbook Text"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawText = $input.first().json.text;\n\nif (!rawText || typeof rawText !== 'string') {\n  throw new Error('No extracted text found in json.text');\n}\n\n// basic cleanup\nconst text = rawText\n  .replace(/\\r/g, '')\n  .replace(/\\n{2,}/g, '\\n')\n  .trim();\n\nconst chunkSize = 1200;   // characters per chunk\nconst overlap = 200;      // overlap between chunks\n\nconst chunks = [];\nlet start = 0;\nlet chunkIndex = 1;\n\nwhile (start < text.length) {\n  const end = Math.min(start + chunkSize, text.length);\n  const chunkText = text.slice(start, end).trim();\n\n  if (chunkText) {\n    chunks.push({\n      json: {\n        chunk_id: `employee_handbook_chunk_${chunkIndex}`,\n        document_name: 'employee_handbook.pdf',\n        source: 'employee_handbook',\n        text: chunkText\n      }\n    });\n    chunkIndex++;\n  }\n\n  if (end === text.length) break;\n  start += chunkSize - overlap;\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "1c2a39ee-b8b0-49cc-9b9d-f5e3e9439067",
+      "name": "Split Handbook into Chunks"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  return {\n    json: {\n      pageContent: item.json.text,\n      metadata: {\n        chunk_id: item.json.chunk_id,\n        document_name: item.json.document_name,\n        source: item.json.source\n      }\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "id": "95c90624-441f-4324-880b-92b710be65fe",
+      "name": "Format Chunks for Vector Store"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "employee-handbook-rag",
+          "mode": "list",
+          "cachedResultName": "employee-handbook-rag"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "87a811fa-c39e-453c-8ec1-956dbc318ed5",
+      "name": "Store Handbook Chunks in Pinecone",
+      "credentials": {
+        "pineconeApi": {
+          "id": "vLbYZWdQ24Cb5zwi",
+          "name": "Pinecone account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "sentence-transformers/all-MiniLM-L6-v2",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        1136,
+        224
+      ],
+      "id": "bf08d55e-3472-409f-92c2-7d807d938baa",
+      "name": "Generate Chunk Embeddings",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "RDtqzcJrcveDJr6G",
+          "name": "Hugging Face account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        224
+      ],
+      "id": "28c072b3-c71f-4320-8675-efd40cd96cd3",
+      "name": "Convert Chunks to Documents"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        544
+      ],
+      "id": "36403875-ec45-4ce0-921c-9f7fe81354b1",
+      "name": "Employee Question",
+      "webhookId": "6686491a-d1c0-4032-9f1e-441f7fb0ba35"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3815193a-2d3d-4e00-972f-65107b315ce4",
+              "name": "question",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        544
+      ],
+      "id": "5af74069-bcbc-44bb-bc80-46da28378b22",
+      "name": "Prepare User Question"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are an HR policy assistant for an employee handbook.\n\nYour job is to answer employee questions using the employee handbook information available through the connected retrieval tool.\n\nRules:\n1. Always use the connected handbook retrieval tool to look up relevant handbook content before answering.\n2. Answer only from the retrieved employee handbook content.\n3. If the handbook does not clearly contain the answer, say exactly:\n   \"I couldn't find a clear answer in the employee handbook.\"\n4. Do not make up policies, benefits, rules, or procedures that are not supported by the handbook content.\n5. Keep answers clear, concise, and practical.\n6. If possible, mention the relevant handbook section or source chunk in the answer.\n7. If the user asks something unrelated to the employee handbook, say that you can only answer based on the employee handbook.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        480,
+        544
+      ],
+      "id": "3b94a62a-c612-40e5-ba6c-6f46bf200d03",
+      "name": "RAG Agent"
+    },
+    {
+      "parameters": {
+        "model": "openrouter/free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        448,
+        768
+      ],
+      "id": "19e0e2a2-4305-43ef-9d47-0228bca28909",
+      "name": "OpenRouter Answer Generator",
+      "credentials": {
+        "openRouterApi": {
+          "id": "itNtM6krojKjYWLr",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Use this tool to search the employee handbook and retrieve relevant handbook sections, policies, benefits, leave rules, work-from-home rules, conduct rules, and HR policy information before answering the user.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "employee-handbook-rag",
+          "mode": "list",
+          "cachedResultName": "employee-handbook-rag"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        576,
+        768
+      ],
+      "id": "6bc004ea-449b-4cdd-b319-c3c33fc8f883",
+      "name": "Retrieve Relevant Handbook Chunks",
+      "credentials": {
+        "pineconeApi": {
+          "id": "vLbYZWdQ24Cb5zwi",
+          "name": "Pinecone account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "sentence-transformers/all-MiniLM-L6-v2",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsHuggingFaceInference",
+      "typeVersion": 1,
+      "position": [
+        656,
+        976
+      ],
+      "id": "b068ee2c-6e8a-4d61-af29-819ea7159ef6",
+      "name": "Embed User Question",
+      "credentials": {
+        "huggingFaceApi": {
+          "id": "RDtqzcJrcveDJr6G",
+          "name": "Hugging Face account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "New Handbook File": {
+      "main": [
+        [
+          {
+            "node": "Download Employee Handbook PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Employee Handbook PDF": {
+      "main": [
+        [
+          {
+            "node": "Extract Handbook Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Handbook Text": {
+      "main": [
+        [
+          {
+            "node": "Split Handbook into Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Handbook into Chunks": {
+      "main": [
+        [
+          {
+            "node": "Format Chunks for Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Chunks for Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Store Handbook Chunks in Pinecone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Chunk Embeddings": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Store Handbook Chunks in Pinecone",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Chunks to Documents": {
+      "ai_document": [
+        [
+          {
+            "node": "Store Handbook Chunks in Pinecone",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Employee Question": {
+      "main": [
+        [
+          {
+            "node": "Prepare User Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare User Question": {
+      "main": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Answer Generator": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve Relevant Handbook Chunks": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed User Question": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Retrieve Relevant Handbook Chunks",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "8693da97-fdec-4839-a026-4b5927a018b8",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c17abe3c48c3783f2238b48c0f7d86eb2cc7dff1d71ec6372b5cd2ed6295779"
+  },
+  "nodeGroups": [],
+  "id": "C2U9TISWhXLPcjWY",
+  "tags": []
+}
