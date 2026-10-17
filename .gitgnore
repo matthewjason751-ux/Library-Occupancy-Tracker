@@ -1,1 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
 
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Secrets and local config
+.env
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local data / logs
+*.log
+*.db
