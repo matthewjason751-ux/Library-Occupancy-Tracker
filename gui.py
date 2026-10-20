@@ -1,1 +1,324 @@
 #gui.py
+#gui.py
+import tkinter as tk
+from charts import show_occupancy_chart
+from integration import (
+    login_callback,
+    get_occupancy_callback,
+    check_in_callback,
+    check_out_callback
+)
+window = tk.Tk()
+window.title("University Library Occupancy Portal")
+window.geometry("1100x700")
+window.configure(bg="#f5f0e6")
+student_id = None
+dashboard_status_label = None
+dashboard_frame = None
+zones_frame = None
+chart_frame = None
+chart_canvas = None
+header= tk.Frame(window,bg="#8b0033", height = 70)
+header.pack(fill="x")
+header.pack_propagate(False)
+title_label = tk.Label(
+    header,
+    text="UNIVERSITY LIBRARY OCCUPANCY PORTAL",
+    bg="#8b0033",
+    fg="white",
+    font=("Arial", 18, "bold")
+)
+title_label.pack(side="left", padx=25, pady=20)
+login_card = tk.Frame(
+    window,
+    bg="white",
+    width=500,
+    height=430,
+    relief="solid",
+    borderwidth = 1
+)
+login_card.pack(pady=70)
+login_card.pack_propagate(False)
+
+login_title = tk.Label(
+    login_card,
+    text = "Library System Login",
+    bg="white",
+    fg="#222222",
+    font=("Times New Roman", 20, "bold"),
+    justify="center"
+)
+login_title.pack(pady=(30, 25))
+student_label = tk.Label(
+    login_card,
+    text = "Student ID / Register No:",
+    bg = "white",
+    fg = "#222222",
+    font = ("Arial", 12)
+)
+student_label.pack(anchor="w", padx=55)
+student_entry = tk.Entry(
+    login_card,
+    width=35,
+    font=("Arial", 12),
+    bg="#f5f0e6"
+)
+student_entry.pack(pady=(5, 15))
+password_label = tk.Label(
+    login_card,
+    text="Password:",
+    bg="white",
+    font=("Arial", 12)
+)
+password_label.pack(anchor="w", padx=55)
+password_entry = tk.Entry(
+    login_card,
+    width=35,
+    font=("Arial", 12),
+    bg="#f5f0e6",
+    show="*"
+)
+password_entry.pack(pady=(5, 20))
+
+def show_dashboard():
+    login_card.pack_forget()
+
+    global dashboard_frame
+    global dashboard_status_label
+    global chart_frame
+    global chart_canvas
+
+    dashboard_frame = tk.Frame(
+        window,
+        bg="#f5f0e6"
+    )
+
+    dashboard_frame.pack(
+        fill="both",
+        expand=True,
+        padx=30,
+        pady=30
+    )
+
+    dashboard_title = tk.Label(
+        dashboard_frame,
+        text="MAIN DASHBOARD",
+        bg="#f5f0e6",
+        font=("Arial", 22, "bold")
+    )
+
+    dashboard_title.pack(anchor="w", pady=(0, 20))
+
+    dashboard_status_label = tk.Label(
+        dashboard_frame,
+        text="Ready for check-in or check-out.",
+        bg="#f5f0e6",
+        fg="#333333",
+        font=("Arial", 12)
+    )
+
+    dashboard_status_label.pack(anchor="w", pady=10)
+
+    global zones_frame
+    zones_frame = tk.Frame(
+        dashboard_frame,
+        bg="#f5f0e6"
+    )
+
+    zones_frame.pack(fill="x")
+
+    chart_frame = tk.Frame(
+        dashboard_frame,
+        bg="white",
+        height=300
+    )
+
+    chart_frame.pack(
+        fill="both",
+        expand=True,
+        pady=20
+    )
+
+    chart_frame.pack_propagate(False)
+
+    check_out_button = tk.Button(
+        dashboard_frame,
+        text="CHECK OUT",
+        command=check_out_student,
+        bg="#8b0033",
+        fg="white",
+        font=("Arial", 12, "bold")
+    )
+
+    check_out_button.pack(pady=25)
+
+    refresh_dashboard()
+
+def refresh_dashboard():
+    global chart_canvas
+
+    for widget in zones_frame.winfo_children():
+        widget.destroy()
+
+    occupancy_data = get_occupancy_callback()
+
+    for zone_name, values in occupancy_data.items():
+        capacity = values["capacity"]
+        occupied = values["occupied"]
+        threshold = values["threshold"]
+
+        if occupied >= capacity:
+            status = "FULL"
+            status_color = "red"
+        elif occupied / capacity >= threshold:
+            status = "HIGH"
+            status_color = "orange"
+        else:
+            status = "NORMAL"
+            status_color = "green"
+
+        zone_card = tk.Frame(
+            zones_frame,
+            bg="white",
+            width=220,
+            height=240,
+            relief="solid",
+            borderwidth=1
+        )
+
+        zone_card.pack(
+            side="left",
+            expand=True,
+            fill="both",
+            padx=8
+        )
+
+        zone_card.pack_propagate(False)
+
+        tk.Label(
+            zone_card,
+            text=f"{zone_name.upper()} ZONE",
+            bg="white",
+            font=("Arial", 13, "bold")
+        ).pack(pady=(20, 12))
+
+        tk.Label(
+            zone_card,
+            text=f"Capacity: {capacity}",
+            bg="white",
+            font=("Arial", 12)
+        ).pack()
+
+        tk.Label(
+            zone_card,
+            text=f"Current: {occupied}",
+            bg="white",
+            font=("Arial", 12)
+        ).pack(pady=5)
+
+        tk.Label(
+            zone_card,
+            text=f"Status: {status}",
+            bg="white",
+            fg=status_color,
+            font=("Arial", 12, "bold")
+        ).pack()
+
+        check_in_button = tk.Button(
+            zone_card,
+            text="CHECK IN",
+            command=lambda selected_zone=zone_name:
+                check_in_student(selected_zone)
+        )
+
+        check_in_button.pack(pady=8)
+
+    if chart_canvas is not None:
+        chart_canvas.get_tk_widget().destroy()
+
+    chart_canvas = show_occupancy_chart(
+        chart_frame,
+        get_occupancy_callback()
+    )
+
+def check_in_student(zone):
+    result = check_in_callback(student_id, zone)
+
+    if result:
+        dashboard_status_label.config(
+            text=f"Checked in to {zone}.",
+            fg="green"
+        )
+        refresh_dashboard()
+    else:
+        dashboard_status_label.config(
+            text="Check-in failed.",
+            fg="red"
+        )
+
+def check_out_student():
+    result = check_out_callback(student_id)
+
+    if result:
+        dashboard_status_label.config(
+            text="Checked out successfully.",
+            fg="green"
+        )
+        refresh_dashboard()
+    else:
+        dashboard_status_label.config(
+            text="Check-out failed.",
+            fg="red"
+        )
+
+def login_user():
+    global student_id
+
+    student_id = student_entry.get().strip()
+    password = password_entry.get()
+
+    if student_id == "" or password == "":
+        status_label.config(
+            text="Status: Please enter all fields.",
+            fg="red"
+        )
+        return
+
+    result = login_callback(student_id, password)
+
+    if result:
+        status_label.config(
+            text="Status: Login successful.",
+            fg="green"
+        )
+        window.after(500, show_dashboard)
+    else:
+        status_label.config(
+            text="Status: Invalid student ID or password.",
+            fg="red"
+        )
+
+login_button = tk.Button(
+    login_card,
+    text="LOG IN",
+    command=login_user,
+    width=30,
+    height=2,
+    bg="#8b0033",
+    fg="white",
+    activebackground="#650025",
+    activeforeground="white",
+    font=("Arial", 12, "bold"),
+    relief="flat"
+)
+login_button.pack()
+status_label = tk.Label(
+    login_card,
+    text="Status: Please enter your credentials.",
+    bg="white",
+    fg="#333333",
+    font=("Arial", 11)
+)
+status_label.pack(pady=18)
+
+window.mainloop()
