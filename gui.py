@@ -1,12 +1,12 @@
 #gui.py
-#gui.py
 import tkinter as tk
 from charts import show_occupancy_chart
 from integration import (
     login_callback,
     get_occupancy_callback,
     check_in_callback,
-    check_out_callback
+    check_out_callback,
+    IntegrationError
 )
 window = tk.Tk()
 window.title("University Library Occupancy Portal")
@@ -100,14 +100,30 @@ def show_dashboard():
         pady=30
     )
 
+    dashboard_top = tk.Frame(dashboard_frame, bg="#f5f0e6")
+    dashboard_top.pack(fill="x", pady=(0, 10))
+
     dashboard_title = tk.Label(
-        dashboard_frame,
+        dashboard_top,
         text="MAIN DASHBOARD",
         bg="#f5f0e6",
         font=("Arial", 22, "bold")
     )
+    dashboard_title.pack(side="left")
 
-    dashboard_title.pack(anchor="w", pady=(0, 20))
+    check_out_button = tk.Button(
+        dashboard_top,
+        text="CHECK OUT",
+        command=check_out_student,
+        bg="#8b0033",
+        fg="white",
+        activebackground="#650025",
+        activeforeground="white",
+        font=("Arial", 11, "bold"),
+        padx=14,
+        pady=5
+    )
+    check_out_button.pack(side="right")
 
     dashboard_status_label = tk.Label(
         dashboard_frame,
@@ -130,27 +146,16 @@ def show_dashboard():
     chart_frame = tk.Frame(
         dashboard_frame,
         bg="white",
-        height=300
+        height=360
     )
 
     chart_frame.pack(
         fill="both",
         expand=True,
-        pady=20
+        pady=10
     )
 
     chart_frame.pack_propagate(False)
-
-    check_out_button = tk.Button(
-        dashboard_frame,
-        text="CHECK OUT",
-        command=check_out_student,
-        bg="#8b0033",
-        fg="white",
-        font=("Arial", 12, "bold")
-    )
-
-    check_out_button.pack(pady=25)
 
     refresh_dashboard()
 
@@ -181,7 +186,7 @@ def refresh_dashboard():
             zones_frame,
             bg="white",
             width=220,
-            height=240,
+            height=200,
             relief="solid",
             borderwidth=1
         )
@@ -242,32 +247,30 @@ def refresh_dashboard():
     )
 
 def check_in_student(zone):
-    result = check_in_callback(student_id, zone)
-
-    if result:
+    try:
+        result = check_in_callback(student_id, zone)
         dashboard_status_label.config(
-            text=f"Checked in to {zone}.",
+            text=result.get("message", f"Checked in to {zone}."),
             fg="green"
         )
         refresh_dashboard()
-    else:
+    except IntegrationError as error:
         dashboard_status_label.config(
-            text="Check-in failed.",
+            text=f"Check-in failed: {error}",
             fg="red"
         )
 
 def check_out_student():
-    result = check_out_callback(student_id)
-
-    if result:
+    try:
+        result = check_out_callback(student_id)
         dashboard_status_label.config(
-            text="Checked out successfully.",
+            text=result.get("message", "Checked out successfully."),
             fg="green"
         )
         refresh_dashboard()
-    else:
+    except IntegrationError as error:
         dashboard_status_label.config(
-            text="Check-out failed.",
+            text=f"Check-out failed: {error}",
             fg="red"
         )
 
@@ -284,7 +287,14 @@ def login_user():
         )
         return
 
-    result = login_callback(student_id, password)
+    try:
+        result = login_callback(student_id, password)
+    except IntegrationError as error:
+        status_label.config(
+            text=f"Login failed: {error}",
+            fg="red"
+        )
+        return
 
     if result:
         status_label.config(
