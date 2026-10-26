@@ -1,11 +1,13 @@
 #gui.py
 import tkinter as tk
+from tkinter import messagebox
 from charts import show_occupancy_chart
 from integration import (
     login_callback,
     get_occupancy_callback,
     check_in_callback,
     check_out_callback,
+    get_current_visit_callback,
     IntegrationError
 )
 window = tk.Tk()
@@ -18,6 +20,7 @@ dashboard_frame = None
 zones_frame = None
 chart_frame = None
 chart_canvas = None
+current_visit_label = None
 header= tk.Frame(window,bg="#8b0033", height = 70)
 header.pack(fill="x")
 header.pack_propagate(False)
@@ -135,6 +138,18 @@ def show_dashboard():
 
     dashboard_status_label.pack(anchor="w", pady=10)
 
+    global current_visit_label
+
+    current_visit_label = tk.Label(
+    dashboard_frame,
+    text="Checking current visit...",
+    bg="#f5f0e6",
+    fg="#555555",
+    font=("Arial", 11, "italic")
+    )  
+
+    current_visit_label.pack(anchor="w")
+
     global zones_frame
     zones_frame = tk.Frame(
         dashboard_frame,
@@ -158,6 +173,34 @@ def show_dashboard():
     chart_frame.pack_propagate(False)
 
     refresh_dashboard()
+    refresh_current_visit()
+
+def refresh_current_visit():
+    if current_visit_label is None:
+        return
+
+    try:
+        visit = get_current_visit_callback(student_id)
+
+        if visit:
+            current_visit_label.config(
+                text=(
+                    f"Currently checked in to {visit['zone_name']} | "
+                    f"Check-in time: {visit['check_in_time']}"
+                ),
+                fg="green"
+            )
+        else:
+            current_visit_label.config(
+                text="You are not currently checked in.",
+                fg="#555555"
+            )
+
+    except IntegrationError as error:
+        current_visit_label.config(
+            text=f"Could not load current visit: {error}",
+            fg="red"
+        )
 
 def refresh_dashboard():
     global chart_canvas
@@ -249,11 +292,15 @@ def refresh_dashboard():
 def check_in_student(zone):
     try:
         result = check_in_callback(student_id, zone)
+
         dashboard_status_label.config(
             text=result.get("message", f"Checked in to {zone}."),
             fg="green"
         )
+
         refresh_dashboard()
+        refresh_current_visit()
+
     except IntegrationError as error:
         dashboard_status_label.config(
             text=f"Check-in failed: {error}",
@@ -263,17 +310,20 @@ def check_in_student(zone):
 def check_out_student():
     try:
         result = check_out_callback(student_id)
+
         dashboard_status_label.config(
             text=result.get("message", "Checked out successfully."),
             fg="green"
         )
+
         refresh_dashboard()
+        refresh_current_visit()
+
     except IntegrationError as error:
         dashboard_status_label.config(
             text=f"Check-out failed: {error}",
             fg="red"
         )
-
 def login_user():
     global student_id
 
@@ -331,4 +381,24 @@ status_label = tk.Label(
 )
 status_label.pack(pady=18)
 
-window.mainloop()
+def handle_window_close():
+    if student_id:
+        try:
+            visit = get_current_visit_callback(student_id)
+
+            if visit and not messagebox.askyesno(
+                "Active check-in",
+                "You are still checked in. Close without checking out?"
+            ):
+                return
+
+        except IntegrationError:
+            pass
+
+    window.destroy()
+
+
+window.protocol("WM_DELETE_WINDOW", handle_window_close)
+
+if __name__ == "__main__":
+    window.mainloop()

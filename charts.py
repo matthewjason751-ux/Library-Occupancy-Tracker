@@ -1,35 +1,14 @@
-#charts.py
-#charts.py
+# charts.py
+
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 def show_occupancy_chart(parent, occupancy_data):
-    """
-    Displays a bar chart showing current occupancy
-    for each library zone.
+    """Display capacity and current occupancy for each library zone."""
 
-    occupancy_data format:
-
-    {
-        "Silent": {
-            "capacity": 50,
-            "occupied": 42
-        },
-        "General": {
-            "capacity": 100,
-            "occupied": 65
-        },
-        "Discussion": {
-            "capacity": 30,
-            "occupied": 12
-        },
-        "Computer": {
-            "capacity": 40,
-            "occupied": 38
-        }
-    }
-    """
+    if not occupancy_data:
+        return None
 
     zones = list(occupancy_data.keys())
 
@@ -50,17 +29,17 @@ def show_occupancy_chart(parent, occupancy_data):
 
     axis = figure.add_subplot(111)
 
-    x_positions = list(range(len(zones)))
+    positions = list(range(len(zones)))
     bar_width = 0.35
 
     capacity_positions = [
         position - bar_width / 2
-        for position in x_positions
+        for position in positions
     ]
 
     occupied_positions = [
         position + bar_width / 2
-        for position in x_positions
+        for position in positions
     ]
 
     axis.bar(
@@ -89,20 +68,33 @@ def show_occupancy_chart(parent, occupancy_data):
     axis.set_xlabel("Library Zone")
     axis.set_ylabel("Number of Students")
 
-    axis.set_xticks(x_positions)
-    axis.set_xticklabels(zones)
+    axis.set_xticks(positions)
 
-    axis.set_ylim(0, max(capacity_values) + 15)
+    axis.set_xticklabels(
+        zones,
+        ha="center"
+    )
+
+    axis.set_ylim(
+        0,
+        max(capacity_values, default=0) + 15
+    )
 
     axis.legend()
+
     axis.grid(
         axis="y",
         linestyle="--",
         alpha=0.4
     )
 
-    figure.tight_layout(
-        rect=(0, 0.08, 1, 0.92)
+    figure.tight_layout()
+
+    figure.subplots_adjust(
+        left=0.08,
+        right=0.98,
+        bottom=0.18,
+        top=0.90
     )
 
     chart = FigureCanvasTkAgg(
@@ -112,9 +104,7 @@ def show_occupancy_chart(parent, occupancy_data):
 
     chart.draw()
 
-    chart_widget = chart.get_tk_widget()
-
-    chart_widget.pack(
+    chart.get_tk_widget().pack(
         fill="both",
         expand=True
     )
