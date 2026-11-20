@@ -7,7 +7,7 @@ DB_CONFIG = {
     'host': 'localhost',
     'database': 'library_tracker',
     'user': 'root',
-    'password': 'Nishi938'  
+    'password': 'ur pass'  
 }
 
 def get_connection():
